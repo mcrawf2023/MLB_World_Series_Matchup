@@ -1,0 +1,501 @@
+---
+title: "World Series Potential Matchup: A Head-To-Head Comparison of Nathan Eovaldi and Zack Wheeler and An Analysis of the Matchup between Nathan Eovaldi and Bryce Harper"
+output:
+  html_document:
+    df_print: paged
+  pdf_document: default
+---
+```{r}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(ggplot2) # Load ggplot2
+library(reshape) # Load tidyverse
+```
+
+For this analysis I will work with statcast data. There are a few pre-processing steps to go through, but I loaded in the modified data stored as `statcast_2023.rda`. This dataset contains all of the pitches from the 2023 MLB season. 
+```{r}
+load("statcast_2023.rda") # Load data
+```
+
+```{r}
+head(statcast)
+```
+
+Creating a simplified binary outcome to aid our analysis by assigning:
+
+* 0 - For strikes
+* -1 - For plays that result in an out
+* 1 - For a play that results in a positive outcome
+
+```{r}
+# Create empty vector
+outcome <- rep(NA, nrow(statcast))
+
+#%in% = checking to see if something is in something else and returning T/F
+# Set 0 for strikes
+outcome[statcast$description %in% c("called_strike",
+                                   "swinging_strike", 
+                                   "swinging_strike_blocked")] <- 0
+# Set -1 for plays that result in an out
+outcome[statcast$events %in% c("field_out", 
+                              "strikeout", 
+                              "strikeout_double_play", 
+                              "grounded_into_double_play", 
+                              "fielders_choice_out",
+                              "other_out")] <- -1
+
+# Set 1 for positive plays
+outcome[statcast$events %in% c("single",
+                              "double",
+                              "triple",
+                              "walk",
+                              "home_run")]  <- 1
+```
+
+Add the binary outcome to the statcast dataset and then drop rows where this or the pitch name are NA. 
+
+```{r}
+# Create copy of data frame
+statcast_2 <- statcast
+# Add outcome to copied data
+statcast_2$outcome <- outcome
+# Drop rows where outcome is NA
+statcast_2 <- statcast_2[!is.na(statcast_2$outcome) &
+                         !is.na(statcast_2$pitch_name),]
+```
+
+
+ <font size="3"> Choose at least one pitcher and batter from each of the teams in the upcoming world series games (NLDS between Diamondbacks and Phillies had not been completed at this time so this analysis compares the Rangers to the Phillies even though the Diamondbacks were the actual team in the World Series). </font>
+
+ <font size="3"> * Identify the fastest pitch of each pitcher </font>
+
+ <font size="5"> Nathan Eovaldi </font>
+```{r}
+eovaldi <- statcast_2[statcast_2$pitcher_name == "Eovaldi, Nathan", ]
+head(eovaldi)
+```
+
+The fastest individual pitch that Nathan Eovaldi threw was a Fastball that went 99.1 mph
+```{r}
+which.max(eovaldi$release_speed)
+fastest_eovaldi <- eovaldi[62,]
+fastest_eovaldi$pitch_type
+fastest_eovaldi$release_speed
+```
+
+Overall, Nathan Eovaldi's fastest pitch was the fastball, which was 95.4 mph on average
+```{r}
+aggregate(eovaldi$release_speed, list(eovaldi$pitch_type), FUN=mean) 
+```
+
+<font size="5"> Zach Wheeler </font>
+```{r}
+wheeler <- statcast_2[statcast_2$pitcher_name == "Wheeler, Zack", ]
+head(wheeler)
+```
+
+The fastest individual pitch that Zach Wheeler threw was a Fastball that went 98.5 mph
+
+```{r}
+which.max(wheeler$release_speed)
+fastest_wheeler <- wheeler[302,]
+fastest_wheeler$pitch_type
+fastest_wheeler$release_speed
+```
+
+Overall, Zach Wheeler's fastest pitch was also his fastball, which was 96 mph hours on average
+
+```{r}
+aggregate(wheeler$release_speed, list(wheeler$pitch_type), FUN=mean) 
+```
+
+Overall, both pitchers' fastest pitch was the fastball, both in terms of singular pitch thrown that reached the highest speed and their pitch that on average had the highest velocity. 
+
+<font size="3"> * Visualize the distribution of pitch speeds for the fastest pitch of each pitcher </font>
+
+```{r}
+with( eovaldi[ eovaldi$pitch_type=="FF",  ] , hist(release_speed, main = "Fastball Speed - Nathan Eovaldi", xlab = "Pitch speed (mph)",) )
+```
+
+```{r}
+with( wheeler[ wheeler$pitch_type=="FF",  ] , hist(release_speed, main = "Fastball Speed - Zack Wheeler", xlab = "Pitch speed (mph)") )
+```
+
+The histograms of the pitch speeds for the fastballs thrown by Nathan Eovaldi and Zack Wheeler are shown above. One observation that I noticed is that Nathan Eovaldi has more outliers on his fastball pitch speed on both ends (fastballs thrown that were significantly faster or slower than the average speed) while Zach Weeler's fastball speed was more consistent. 
+
+
+<font size="3"> * Calculate the strengths and weaknesses of the players by the different pitch types. </font>
+
+<font size="5"> Nathan Eovaldi </font>
+
+```{r}
+# Set team to analyze
+team <- "TEX"
+
+# Extract unique pitch types
+pitch_types <- unique(statcast_2$pitch_name)
+
+# Create empty vectors to store results
+hit <- strike <- out <- number <- average <- wp_change <- rep(NA, length(pitch_types))
+
+# Loop through and calculate return for each pitch type
+for(i in 1:length(pitch_types)){
+  
+  # Extract data for pitch type 
+  temp <- statcast_2[statcast_2$pitch_name == pitch_types[i] &
+                      statcast_2$pitcher_team == team,]
+  
+  # Calculate number of pitches thrown
+  number[i] <- nrow(temp)
+  # Calculate positive hits
+  hit[i] <- sum(temp$outcome == 1, na.rm =TRUE)
+  # Calculate strikes
+  strike[i] <- sum(temp$outcome == 0, na.rm = TRUE)
+  # Calculate outs 
+  out[i] <- sum(temp$outcome == -1, na.rm = TRUE)
+  # Calculate average
+  average[i] <- mean(temp$outcome)
+  # Calculate win probability change
+  wp_change[i] <- mean(temp$win_prob_change, na.rm = TRUE)
+  
+}
+
+# Join results together
+res_table_1_pitch <- cbind.data.frame(pitch_types, number, hit, strike, out, average, wp_change)
+```
+
+
+```{r}
+# Extract unique pitch types
+pitch_types <- unique(statcast_2$pitch_name)
+
+# Set pitcher
+pitcher <- "Eovaldi, Nathan"
+
+# Create empty vectors to store results
+hit <- strike <- out <- number <- average <- wp_change <- rep(NA, length(pitch_types))
+
+# Loop through and calculate return for each pitch type
+for(i in 1:length(pitch_types)){
+  
+  # Extract data for pitch type 
+  temp <- statcast_2[statcast_2$pitch_name == pitch_types[i] &
+                      statcast_2$pitcher_name == pitcher,]
+  
+  # Calculate number of pitches thrown
+  number[i] <- nrow(temp)
+  # Calculate positive hits
+  hit[i] <- sum(temp$outcome == 1, na.rm =TRUE)
+  # Calculate strikes
+  strike[i] <- sum(temp$outcome == 0, na.rm = TRUE)
+  # Calculate outs 
+  out[i] <- sum(temp$outcome == -1, na.rm = TRUE)
+  # Calculate average
+  average[i] <- mean(temp$outcome)
+  # Calculate win probability change
+  wp_change[i] <- mean(temp$win_prob_change, na.rm = TRUE)
+}
+
+# Join results together
+eovaldi_table <- cbind.data.frame(pitch_types, number, hit, strike, out, average, wp_change)
+res_table_1_pitch[order(res_table_1_pitch$wp_change, decreasing = FALSE),]
+```
+
+```{r}
+# Create column with pitch type and number faced
+eovaldi_table$pitch_num <- paste(eovaldi_table$pitch_types, ": ",
+                                      eovaldi_table$number, sep = "")
+
+
+# Create plot
+g_8 <- ggplot(data = eovaldi_table, # Set dataset
+              aes(x = pitch_num,  # Set x axis as pitch type
+                  y= wp_change, # Set y as win probability change
+                  fill = pitch_types)) + # Set fill as pitch type
+  geom_bar(stat = "identity") + # Set geom bar for bar plot
+  theme_bw() + # Set theme 
+  coord_flip() + # Flip coordinates
+  labs(x = "Pitch Types", # Set labels
+       y = "Average Change in Batter Win Probability",
+       title = "Change in Win probability by Pitch Type",
+       subtitle = "") +
+  theme(panel.grid.major = element_blank(), # Remove grid
+        panel.grid.minor = element_blank(), # Remove grid
+        panel.border = element_blank(), # Remove grid
+        panel.background = element_blank()) + # Remove grid
+  guides(fill = NULL) # Turn off legend for fill
+
+# Generate plot 
+g_8
+```
+
+Nathan Eovaldi's strongest pitches are the split-finger, slider, curveball, and 4-seam fastball. His cutter appears to be a weaker pitch for him as he threw it the third most of his pitches but it only had a slight impact on the average change in batter win probability as opposed to the others that appeared to be much more effective. 
+
+<font size="5"> Zack Wheeler </font>
+```{r}
+# Set team to analyze
+team <- "PHI"
+
+# Extract unique pitch types
+pitch_types <- unique(statcast_2$pitch_name)
+
+# Create empty vectors to store results
+hit <- strike <- out <- number <- average <- wp_change <- rep(NA, length(pitch_types))
+
+# Loop through and calculate return for each pitch type
+for(i in 1:length(pitch_types)){
+  
+  # Extract data for pitch type 
+  temp <- statcast_2[statcast_2$pitch_name == pitch_types[i] &
+                      statcast_2$pitcher_team == team,]
+  
+  # Calculate number of pitches thrown
+  number[i] <- nrow(temp)
+  # Calculate positive hits
+  hit[i] <- sum(temp$outcome == 1, na.rm =TRUE)
+  # Calculate strikes
+  strike[i] <- sum(temp$outcome == 0, na.rm = TRUE)
+  # Calculate outs 
+  out[i] <- sum(temp$outcome == -1, na.rm = TRUE)
+  # Calculate average
+  average[i] <- mean(temp$outcome)
+  # Calculate win probability change
+  wp_change[i] <- mean(temp$win_prob_change, na.rm = TRUE)
+  
+}
+
+# Join results together
+res_table_2_pitch <- cbind.data.frame(pitch_types, number, hit, strike, out, average, wp_change)
+```
+
+```{r}
+# Set pitcher player name
+pitcher <- "Wheeler, Zack"
+
+
+# Create empty vectors to store results
+hit <- strike <- out <- number <- average <- wp_change <- rep(NA, length(pitch_types))
+
+# Loop through and calculate return for each pitch type
+for(i in 1:length(pitch_types)){
+  
+  # Extract data for pitch type 
+  temp <- statcast_2[statcast_2$pitch_name == pitch_types[i] &
+                      statcast_2$pitcher_name == pitcher,]
+  
+  # Calculate number of pitches thrown
+  number[i] <- nrow(temp)
+  # Calculate positive hits
+  hit[i] <- sum(temp$outcome == 1, na.rm =TRUE)
+  # Calculate strikes
+  strike[i] <- sum(temp$outcome == 0, na.rm = TRUE)
+  # Calculate outs 
+  out[i] <- sum(temp$outcome == -1, na.rm = TRUE)
+  # Calculate average
+  average[i] <- mean(temp$outcome)
+  # Calculate win probability change
+  wp_change[i] <- mean(temp$win_prob_change, na.rm = TRUE)
+}
+
+# Join results together
+res_table_player_2 <- cbind.data.frame(pitch_types, number, hit, strike, out, average, wp_change)
+```
+
+```{r}
+# Create column with pitch type and number faced
+res_table_player_2$pitch_num <- paste(res_table_player_2$pitch_types, ": ",
+                                      res_table_player_2$number, sep = "")
+
+
+# Create plot
+g_8 <- ggplot(data = res_table_player_2, # Set dataset
+              aes(x = pitch_num,  # Set x axis as pitch type
+                  y= wp_change, # Set y as win probability change
+                  fill = pitch_types)) + # Set fill as pitch type
+  geom_bar(stat = "identity") + # Set geom bar for bar plot
+  theme_bw() + # Set theme 
+  coord_flip() + # Flip coordinates
+  labs(x = "Pitch Types", # Set labels
+       y = "Average Change in Batter Win Probability",
+       title = "Change in Win probability by Pitch Type",
+       subtitle = "") +
+  theme(panel.grid.major = element_blank(), # Remove grid
+        panel.grid.minor = element_blank(), # Remove grid
+        panel.border = element_blank(), # Remove grid
+        panel.background = element_blank()) + # Remove grid
+  guides(fill = NULL) # Turn off legend for fill
+
+# Generate plot 
+g_8
+```
+
+Zack Wheeler's strongest pitches appear to be his sweeper and his slider, while his curveball and changeup seem like solid pitches for him but not as effective as the former two. His biggest weakness seems to be his sinker, which is an area he should focus on improving in because despite the fact that it is the pitch he throws the second most it is most advantageous to the batter by a significant margin. 
+
+
+ <font size="3"> * Analyze the match up between at least one pitcher and batter. Describe what would be some good pitches to target in the match up for the pitcher and pitches to be cautious for the batter. </font>
+
+```{r}
+name <- "Harper, Bryce"
+
+# Create empty vectors to store results
+hit <- strike <- out <- number <- average <- wp_change <- rep(NA, length(pitch_types))
+
+# Loop through and calculate return for each pitch type
+for(i in 1:length(pitch_types)){
+  
+  # Extract data for pitch type and team
+  temp <- statcast_2[statcast_2$pitch_name == pitch_types[i] &
+                      statcast_2$player_name == name,]
+  
+  # Calculate number of pitches thrown
+  number[i] <- nrow(temp)
+  # Calculate positive hits
+  hit[i] <- sum(temp$outcome == 1, na.rm =TRUE)
+  # Calculate strikes
+  strike[i] <- sum(temp$outcome == 0, na.rm = TRUE)
+  # Calculate outs 
+  out[i] <- sum(temp$outcome == -1, na.rm = TRUE)
+  # Calculate average
+  average[i] <- mean(temp$outcome)
+  # Calculate win probability change
+  wp_change[i] <- mean(temp$win_prob_change, na.rm = TRUE)
+  
+}
+
+# Join results together
+res_table_3 <- cbind.data.frame(pitch_types, number, hit, strike, out, average, wp_change)
+```
+
+```{r}
+res_table_3[order(res_table_3$wp_change, decreasing = TRUE),]
+```
+
+```{r}
+# Create column with pitch type and number faced (so can ba axis on graph)
+res_table_3$pitch_num <- paste(res_table_3$pitch_types, ": ", res_table_3$number, sep = "")
+# Melt data and drop 0 values
+plot_db <- melt(res_table_3[res_table_3$number != 0, c("pitch_num", "average", "wp_change")])
+# Create plot
+g_1 <- ggplot(data = plot_db, # Set dataset
+              aes(x = pitch_num,  # Set x axis as pitch type
+                  y= value, # Set y as return
+                  fill = pitch_num)) + # Set fill as pitch type
+  geom_bar(stat = "identity") + # Set geom bar for bar plot
+  facet_wrap(~ variable, scales = "free", nrow = 2) + 
+  theme_bw() + # Set theme 
+  coord_flip() + # Flip coordinates
+  labs(x = "Pitch Types", # Set labels
+       y = "",
+       title = "Batting Success by Pitch Type",
+       subtitle = "Bryce Harper - Philadelphia Phillies") +
+  theme(panel.grid.major = element_blank(), # Remove grid
+        panel.grid.minor = element_blank(), # Remove grid
+        panel.border = element_blank(), # Remove grid
+        panel.background = element_blank(), # Remove grid
+        legend.position="none") + # Turn off legend
+  guides(fill = NULL) # Turn off legend for fill
+
+# Generate plot 
+g_1
+```
+
+```{r}
+# Set pitcher to analyze
+name <- "Eovaldi, Nathan"
+
+# Create empty vectors to store results
+hit <- strike <- out <- number <- average <- wp_change <- rep(NA, length(pitch_types))
+
+# Loop through and calculate return for each pitch type
+for(i in 1:length(pitch_types)){
+  
+  # Extract data for pitch type 
+  temp <- statcast_2[statcast_2$pitch_name == pitch_types[i] &
+                      statcast_2$pitcher_name == name,]
+  
+  # Calculate number of pitches thrown
+  number[i] <- nrow(temp)
+  # Calculate positive hits
+  hit[i] <- sum(temp$outcome == 1, na.rm =TRUE)
+  # Calculate strikes
+  strike[i] <- sum(temp$outcome == 0, na.rm = TRUE)
+  # Calculate outs 
+  out[i] <- sum(temp$outcome == -1, na.rm = TRUE)
+  # Calculate average
+  average[i] <- mean(temp$outcome)
+  # Calculate win probability change
+  wp_change[i] <- mean(temp$win_prob_change, na.rm = TRUE)
+  
+}
+
+# Join results together
+res_table_3_pitch <- cbind.data.frame(pitch_types, number, hit, strike, out, average, wp_change)
+```
+
+```{r}
+res_table_3_pitch[order(res_table_3_pitch$wp_change, decreasing = FALSE),]
+```
+
+```{r}
+# Create column with pitch type and number faced
+res_table_3_pitch$pitch_num <- paste(res_table_3_pitch$pitch_types, ": ", res_table_3_pitch$number, sep = "")
+# Melt data and drop 0 values
+plot_db_3p <- melt(res_table_3_pitch[res_table_3_pitch$number != 0, c("pitch_num", "average", "wp_change")])
+# Create plot
+g_7 <- ggplot(data = plot_db_3p, # Set dataset
+              aes(x = pitch_num,  # Set x axis as pitch type
+                  y= value, # Set y as return
+                  fill = pitch_num)) + # Set fill as pitch type
+  geom_bar(stat = "identity") + # Set geom bar for bar plot
+  facet_wrap(~ variable, scales = "free", nrow = 2) + 
+  theme_bw() + # Set theme 
+  coord_flip() + # Flip coordinates
+  labs(x = "Pitch Types", # Set labels
+       y = "",
+       title = "Pitching Success by Pitch Type",
+       subtitle = "Nathan Eovaldi - 2023") +
+  theme(panel.grid.major = element_blank(), # Remove grid
+        panel.grid.minor = element_blank(), # Remove grid
+        panel.border = element_blank(), # Remove grid
+        panel.background = element_blank(), # Remove grid
+        legend.position="none") + # Turn off legend
+  guides(fill = NULL) # Turn off legend for fill
+
+# Generate plot 
+g_7
+```
+
+```{r}
+#phillies batters against rangers pitchers (harper against eovaldi here)
+team_2_bat_prob <- cbind.data.frame(res_table_3$pitch_types, 
+                                    (res_table_3$wp_change + res_table_3_pitch$wp_change)/2)
+names(team_2_bat_prob) <- c("pitch_types", "exp_wp")
+```
+
+```{r}
+# Create plot
+g_10 <- ggplot(data = team_2_bat_prob, # Set dataset
+              aes(x = pitch_types,  # Set x axis as pitch type
+                  y= exp_wp, # Set y as win probability change
+                  fill = pitch_types)) + # Set fill as pitch type
+  geom_bar(stat = "identity") + # Set geom bar for bar plot
+  theme_bw() + # Set theme 
+  coord_flip() + # Flip coordinates
+  labs(x = "Pitch Types", # Set labels
+       y = "Average Change in Batter Win Probability",
+       title = "Change in Win probability by Pitch Type",
+       subtitle = "Bryce Harper (Batting) v Nathan Eovaldi (Pitching)") +
+  theme(panel.grid.major = element_blank(), # Remove grid
+        panel.grid.minor = element_blank(), # Remove grid
+        panel.border = element_blank(), # Remove grid
+        panel.background = element_blank()) + # Remove grid
+  guides(fill = NULL) # Turn off legend for fill
+
+# Generate plot 
+g_10
+```
+
+This matchup will likely favor Nathan Eovaldi if he leans on his split-finger, but Bryce Harper will have an advantage if Eovaldi relies on his curveball too heavily. Eovaldi's strongest pitch is the split-finger because it has a combination of a positive impact on his win probability and a negative impact on opponent's batting averages against the pitch. On the contrary, the split-finger is one of Bryce Harper's weakest pitches because it has the strongest negative impact on his change in win probability. While Harper's overall offensive statistics were very strong in the 2023 season, he has only faced 18 split-fingers this season so that would be a good pitch to target for him. This is advantageous for Eovaldi because the split-finger is the pitch he throws the second most frequently behind his curveball. However, Eovaldi's fallback pitch, the curveball, is one of Bryce Harper's strongest pitches to hit. Especially if Eovaldi falls behind in the count and must fall back on his curveball, the matchup would favor Harper. Sliders seem to favor Eovaldi, cutters favor Harper, and the 4-Seam fastball is closer to neutral although it slightly favors Eovaldi. 
+
